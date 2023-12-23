@@ -1,5 +1,5 @@
 {
-  "extends": "./config/tsconfig.json",
-  "include": ["**/*.ts", "**/*.tsx", "**/*.json"],
+  "extends": "hydrogen/config/tsconfig.json",
+  "include": ["**/*"],
   "exclude": ["node_modules"]
 }

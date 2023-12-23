@@ -6,7 +6,7 @@ import postcss from "postcss";
 import type { Config } from "tailwindcss";
 import tailwindcss from "tailwindcss";
 import { environment } from "./environment.ts";
-import { root } from "./util.ts";
+import { root } from "hydrogen/util.ts";
 
 export async function getCss(config: Config) {
   const css = await readFile(path.join(root, "styles.css"), "utf8");

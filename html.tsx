@@ -4,13 +4,13 @@ import type { Child } from "hono/jsx";
 import { getCss } from "./css.ts";
 import { Script } from "./script.tsx";
 import path from "node:path";
-import { hasStatic, root } from "./util.ts";
+import { hasStatic, root } from "hydrogen/util.ts";
 import { stat } from "node:fs/promises";
 
 const configPath = path.join(root, "tailwind.config.ts");
 const hasConfig = await stat(configPath).then(
   () => true,
-  () => false
+  () => false,
 );
 const styles = hasConfig
   ? await getCss(await import(configPath).then((m) => m.default))

@@ -1,4 +1,4 @@
 /** @type {import("eslint").Linter.Config} */
 module.exports = {
-  extends: ["./config/eslint.cjs"],
+  extends: ["./node_modules/hydrogen/config/eslint.cjs"],
 };

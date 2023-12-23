@@ -7,7 +7,7 @@ import type { Server } from "node:http";
 import path from "node:path";
 import { environment } from "./environment.ts";
 import { logger, loggerMiddleware, setLoggerMetadata } from "./logger.ts";
-import { hasStatic, root } from "./util.ts";
+import { hasStatic, root } from "hydrogen/util.ts";
 
 let config = {
   pageDir: "pages",
@@ -55,7 +55,7 @@ export async function start({
   console.info(`🚀 http://localhost:${environment.PORT}`);
 
   if (environment.WATCH) {
-    import("./hot-reload.ts").then(({ setupHotReload }) =>
+    import("hydrogen/hot-reload.ts").then(({ setupHotReload }) =>
       setupHotReload(server)
     );
   }
