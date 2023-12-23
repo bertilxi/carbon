@@ -2,12 +2,13 @@ import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import type { Handler, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
+import type { FC } from "hono/jsx";
+import { hasStatic, root } from "hydrogen/util.ts";
 import { readdir, stat } from "node:fs/promises";
 import type { Server } from "node:http";
 import path from "node:path";
 import { environment } from "./environment.ts";
 import { logger, loggerMiddleware, setLoggerMetadata } from "./logger.ts";
-import { hasStatic, root } from "hydrogen/util.ts";
 
 let config = {
   pageDir: "pages",
@@ -77,7 +78,7 @@ async function setupHono() {
 
         return next();
       },
-      serveStatic({ root })
+      serveStatic({ root: "./" })
     );
   }
 
@@ -106,9 +107,16 @@ async function setupHono() {
   });
 
   await Promise.all([
-    generate(config.pageDir, (route, importPath) => {
-      app.get(route === "/home" ? "/" : route, async (c) => {
-        const { default: Page } = await import(importPath);
+    generate(config.pageDir, async (route, importPath) => {
+      const { default: Page, middlewares = [] } = (await import(
+        importPath
+      )) as {
+        middlewares: MiddlewareHandler[];
+        default: FC;
+      };
+      const resolvedRoute = route === "/home" ? "/" : route;
+
+      app.get(resolvedRoute, ...middlewares, (c) => {
         return c.html(<Page c={c} />);
       });
     }),
