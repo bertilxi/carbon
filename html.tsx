@@ -10,7 +10,7 @@ import { stat } from "node:fs/promises";
 const configPath = path.join(root, "tailwind.config.ts");
 const hasConfig = await stat(configPath).then(
   () => true,
-  () => false,
+  () => false
 );
 const styles = hasConfig
   ? await getCss(await import(configPath).then((m) => m.default))
@@ -38,11 +38,6 @@ export function Html({
   image,
   color,
 }: Properties) {
-  const fullTitle = title ? `${title} - picsel` : "picsel";
-  const fullDescription = description
-    ? `${description} - Capturando Momentos especiales`
-    : "Capturando Momentos especiales";
-
   return (
     <html lang={lang} class="dark">
       <head>
@@ -57,14 +52,14 @@ export function Html({
 
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-        <title>{fullTitle}</title>
-        <meta name="title" content={fullTitle} />
-        <meta name="description" content={fullDescription} />
+        <title>{title}</title>
+        <meta name="title" content={title} />
+        <meta name="description" content={description} />
         {keywords && <meta name="keywords" content={keywords} />}
         <meta property="og:type" content="website" />
         <meta property="og:url" content={url} />
-        <meta property="og:title" content={fullTitle} />
-        <meta property="og:description" content={fullDescription} />
+        <meta property="og:title" content={title} />
+        <meta property="og:description" content={description} />
         {image && <meta property="og:image" content={image} />}
         {color && <meta name="theme-color" content={color} />}
 

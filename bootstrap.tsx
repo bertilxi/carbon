@@ -25,11 +25,16 @@ function setConfig(customConfig: Partial<typeof config>) {
   config = newConfig;
 }
 
+type AppHandler = (app: Hono) => void | Promise<void>;
+const noop = () => void 0;
+
 interface StartConfig {
   name?: string;
   port?: number;
   pageDir?: string;
   functionDir?: string;
+  beforeRoutes?: AppHandler;
+  afterRoutes?: AppHandler;
 }
 
 export async function start({
@@ -37,6 +42,8 @@ export async function start({
   port,
   pageDir,
   functionDir,
+  beforeRoutes = noop,
+  afterRoutes = noop,
 }: StartConfig = {}) {
   setConfig({
     pageDir,
@@ -45,7 +52,7 @@ export async function start({
 
   setLoggerMetadata("service", name);
 
-  const app = await setupHono();
+  const app = await setupHono(beforeRoutes, afterRoutes);
 
   const server = serve({
     hostname: "0.0.0.0",
@@ -53,7 +60,7 @@ export async function start({
     fetch: app.fetch,
   }) as Server;
 
-  console.info(`🚀 http://localhost:${environment.PORT}`);
+  console.info(`🚀 http://localhost:${port ?? environment.PORT}`);
 
   if (environment.WATCH) {
     import("hydrogen/hot-reload.ts").then(({ setupHotReload }) =>
@@ -62,7 +69,10 @@ export async function start({
   }
 }
 
-async function setupHono() {
+async function setupHono(
+  beforeRoutes: AppHandler = noop,
+  afterRoutes: AppHandler = noop
+) {
   const app = new Hono();
 
   app.use("*", loggerMiddleware);
@@ -106,34 +116,39 @@ async function setupHono() {
     return c.body(null, 200);
   });
 
+  await beforeRoutes(app);
+
   await Promise.all([
     generate(config.pageDir, async (route, importPath) => {
-      const { default: Page, middlewares = [] } = (await import(
-        importPath
-      )) as {
+      const {
+        default: Page,
+        method = "get",
+        middlewares = [],
+      } = (await import(importPath)) as {
+        method: "get" | "post" | "put" | "delete";
         middlewares: MiddlewareHandler[];
         default: FC;
       };
       const resolvedRoute = route === "/home" ? "/" : route;
 
-      app.get(resolvedRoute, ...middlewares, (c) => {
-        return c.html(<Page c={c} />);
-      });
+      app[method](resolvedRoute, ...middlewares, (c) => c.html(<Page c={c} />));
     }),
     generate(config.functionDir, async (route, importPath) => {
       const {
+        default: handler,
         method = "get",
         middlewares = [],
-        handler,
       } = (await import(importPath)) as {
         method: "get" | "post" | "put" | "delete";
         middlewares: MiddlewareHandler[];
-        handler: Handler;
+        default: Handler;
       };
 
       app[method](route, ...middlewares, handler);
     }),
   ]);
+
+  await afterRoutes(app);
 
   return app;
 }
@@ -156,7 +171,9 @@ async function generate(
     recursive: true,
     withFileTypes: true,
   });
-  entries = entries.toSorted((a) => (a.name.includes(":") ? 1 : -1));
+  entries = entries
+    .filter((entry) => !entry.name.startsWith("_"))
+    .toSorted((a) => (a.name.includes(":") ? 1 : -1));
 
   for (const entry of entries) {
     if (entry.isDirectory()) {
