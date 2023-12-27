@@ -120,35 +120,34 @@ async function setupHono(
 
   await beforeRoutes(app);
 
-  await Promise.all([
-    generate(config.pageDir, async (route, importPath) => {
-      const {
-        default: Page,
-        method = "get",
-        middlewares = [],
-      } = (await import(importPath)) as {
-        method: "get" | "post" | "put" | "delete";
-        middlewares: MiddlewareHandler[];
-        default: FC;
-      };
-      const resolvedRoute = route === "/home" ? "/" : route;
+  await generate(config.pageDir, async (route, importPath) => {
+    const {
+      default: Page,
+      method = "get",
+      middlewares = [],
+    } = (await import(importPath)) as {
+      method: "get" | "post" | "put" | "delete";
+      middlewares: MiddlewareHandler[];
+      default: FC;
+    };
+    const resolvedRoute = route === "/home" ? "/" : route;
 
-      app[method](resolvedRoute, ...middlewares, (c) => c.html(<Page c={c} />));
-    }),
-    generate(config.functionDir, async (route, importPath) => {
-      const {
-        default: handler,
-        method = "get",
-        middlewares = [],
-      } = (await import(importPath)) as {
-        method: "get" | "post" | "put" | "delete";
-        middlewares: MiddlewareHandler[];
-        default: Handler;
-      };
+    app[method](resolvedRoute, ...middlewares, (c) => c.html(<Page c={c} />));
+  });
 
-      app[method](route, ...middlewares, handler);
-    }),
-  ]);
+  await generate(config.functionDir, async (route, importPath) => {
+    const {
+      default: handler,
+      method = "get",
+      middlewares = [],
+    } = (await import(importPath)) as {
+      method: "get" | "post" | "put" | "delete";
+      middlewares: MiddlewareHandler[];
+      default: Handler;
+    };
+
+    app[method](route, ...middlewares, handler);
+  });
 
   await afterRoutes(app);
 
@@ -157,7 +156,7 @@ async function setupHono(
 
 async function generate(
   directory: string,
-  handler: (route: string, importPath: string) => void
+  handler: (route: string, importPath: string) => void | Promise<void>
 ) {
   const directoryPath = path.join(root, directory);
   const existDirectory = await stat(directoryPath).then(
@@ -175,23 +174,22 @@ async function generate(
   });
   entries = entries
     .filter((entry) => !entry.name.startsWith("_"))
+    .filter((entry) => !entry.isDirectory())
     .toSorted((a) => (a.name.includes(":") ? 1 : -1));
 
-  for (const entry of entries) {
-    if (entry.isDirectory()) {
-      continue;
-    }
+  return Promise.all(
+    entries.map((entry) => {
+      const route = path
+        .join(path.relative(root, entry.path), entry.name)
+        .replace(directory, "")
+        .replace(path.extname(entry.name), "");
+      const importPath = path.join(
+        root,
+        path.relative(root, entry.path),
+        entry.name
+      );
 
-    const route = path
-      .join(path.relative(root, entry.path), entry.name)
-      .replace(directory, "")
-      .replace(path.extname(entry.name), "");
-    const importPath = path.join(
-      root,
-      path.relative(root, entry.path),
-      entry.name
-    );
-
-    handler(route, importPath);
-  }
+      return handler(route, importPath);
+    })
+  );
 }
