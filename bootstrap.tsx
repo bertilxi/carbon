@@ -69,14 +69,14 @@ export async function start({
 
   if (environment.WATCH) {
     import("hydrogen/hot-reload.ts").then(({ setupHotReload }) =>
-      setupHotReload(server)
+      setupHotReload(server),
     );
   }
 }
 
 async function setupHono(
   beforeRoutes: AppHandler = noop,
-  afterRoutes: AppHandler = noop
+  afterRoutes: AppHandler = noop,
 ) {
   const app = new Hono();
 
@@ -88,12 +88,12 @@ async function setupHono(
       (c, next) => {
         c.header(
           "Cache-Control",
-          "public, max-age=31536000, s-maxage=31536000"
+          "public, max-age=31536000, s-maxage=31536000",
         );
 
         return next();
       },
-      serveStatic({ root: "./" })
+      serveStatic({ root: "./" }),
     );
   }
 
@@ -107,7 +107,7 @@ async function setupHono(
         message: error.message || "unexpected error",
         ...(environment.WATCH && { stack: error.stack }),
       },
-      (error as any).statusCode ?? 500
+      (error as any).statusCode ?? 500,
     );
   });
 
@@ -137,12 +137,12 @@ async function setupHono(
 async function generate(
   directory: string,
   extensions: string[],
-  handler: (route: string, importPath: string) => void | Promise<void>
+  handler: (route: string, importPath: string) => void | Promise<void>,
 ) {
   const directoryPath = path.join(root, directory);
   const existDirectory = await stat(directoryPath).then(
     () => true,
-    () => false
+    () => false,
   );
 
   if (!existDirectory) {
@@ -168,11 +168,11 @@ async function generate(
       const importPath = path.join(
         root,
         path.relative(root, entry.path),
-        entry.name
+        entry.name,
       );
 
       return handler(route, importPath);
-    })
+    }),
   );
 }
 
@@ -241,7 +241,7 @@ function contentHandler(app: Hono) {
 function render(
   c: Context,
   Component: FC,
-  properties: Record<string, any> = {}
+  properties: Record<string, any> = {},
 ) {
   const body = html`${raw("<!DOCTYPE html>")}${jsx(Component, properties)}`;
 

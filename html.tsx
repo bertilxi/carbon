@@ -10,7 +10,7 @@ import { stat } from "node:fs/promises";
 const configPath = path.join(root, "tailwind.config.ts");
 const hasConfig = await stat(configPath).then(
   () => true,
-  () => false
+  () => false,
 );
 const styles = hasConfig
   ? await getCss(await import(configPath).then((m) => m.default))
