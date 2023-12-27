@@ -1,3 +1,5 @@
+import "./setup.ts";
+
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import type { Handler, MiddlewareHandler } from "hono";
