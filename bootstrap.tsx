@@ -2,15 +2,18 @@ import "./setup.ts";
 
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
-import type { Handler, MiddlewareHandler } from "hono";
+import type { Context, Handler, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
-import type { FC } from "hono/jsx";
+import { html, raw } from "hono/html";
+import { jsx, type FC } from "hono/jsx";
+import { renderToReadableStream } from "hono/jsx/streaming";
 import { hasStatic, root } from "hydrogen/util.ts";
 import { readdir, stat } from "node:fs/promises";
 import type { Server } from "node:http";
 import path from "node:path";
 import { environment } from "./environment.ts";
 import { logger, loggerMiddleware, setLoggerMetadata } from "./logger.ts";
+import { getContent } from "./mdx.ts";
 
 let config = {
   pageDir: "pages",
@@ -120,34 +123,11 @@ async function setupHono(
 
   await beforeRoutes(app);
 
-  await generate(config.pageDir, async (route, importPath) => {
-    const {
-      default: Page,
-      method = "get",
-      middlewares = [],
-    } = (await import(importPath)) as {
-      method: "get" | "post" | "put" | "delete";
-      middlewares: MiddlewareHandler[];
-      default: FC;
-    };
-    const resolvedRoute = route === "/home" ? "/" : route;
-
-    app[method](resolvedRoute, ...middlewares, (c) => c.html(<Page c={c} />));
-  });
-
-  await generate(config.functionDir, async (route, importPath) => {
-    const {
-      default: handler,
-      method = "get",
-      middlewares = [],
-    } = (await import(importPath)) as {
-      method: "get" | "post" | "put" | "delete";
-      middlewares: MiddlewareHandler[];
-      default: Handler;
-    };
-
-    app[method](route, ...middlewares, handler);
-  });
+  await Promise.all([
+    generate(config.functionDir, [".ts"], functionsHandler(app)),
+    generate(config.pageDir, [".tsx"], pagesHandler(app)),
+    generate(config.pageDir, [".mdx"], contentHandler(app)),
+  ]);
 
   await afterRoutes(app);
 
@@ -156,6 +136,7 @@ async function setupHono(
 
 async function generate(
   directory: string,
+  extensions: string[],
   handler: (route: string, importPath: string) => void | Promise<void>
 ) {
   const directoryPath = path.join(root, directory);
@@ -175,6 +156,7 @@ async function generate(
   entries = entries
     .filter((entry) => !entry.name.startsWith("_"))
     .filter((entry) => !entry.isDirectory())
+    .filter((entry) => extensions.includes(path.extname(entry.name)))
     .toSorted((a) => (a.name.includes(":") ? 1 : -1));
 
   return Promise.all(
@@ -192,4 +174,81 @@ async function generate(
       return handler(route, importPath);
     })
   );
+}
+
+function functionsHandler(app: Hono) {
+  return async (route: string, importPath: string) => {
+    const {
+      default: handler,
+      method = "get",
+      middlewares = [],
+    } = (await import(importPath)) as {
+      method: "get" | "post" | "put" | "delete";
+      middlewares: MiddlewareHandler[];
+      default: Handler;
+    };
+
+    app[method](path.join("api", route), ...middlewares, handler);
+  };
+}
+
+function pagesHandler(app: Hono) {
+  return async (route: string, importPath: string) => {
+    const {
+      default: Page,
+      method = "get",
+      middlewares = [],
+    } = (await import(importPath)) as {
+      method: "get" | "post" | "put" | "delete";
+      middlewares: MiddlewareHandler[];
+      default: FC;
+    };
+    const resolvedRoute = route === "/home" ? "/" : route;
+
+    app[method](resolvedRoute, ...middlewares, (c) => render(c, Page, { c }));
+  };
+}
+
+function contentHandler(app: Hono) {
+  return (route: string, importPath: string) => {
+    const resolvedRoute = route === "/home" ? "/" : route;
+
+    app.get(resolvedRoute, async (c) => {
+      const { default: Content, layout } = (await getContent(importPath)) as {
+        default: FC;
+        layout: string;
+        middlewares: MiddlewareHandler[];
+      };
+
+      const layoutPath = layout
+        ? path.join(path.dirname(importPath), layout)
+        : "";
+      const Layout = layoutPath
+        ? await import(layoutPath).then((m) => m.default)
+        : ((({ children }) => <>{children}</>) satisfies FC);
+
+      const Page = () => (
+        <Layout>
+          <Content />
+        </Layout>
+      );
+
+      return render(c, Page);
+    });
+  };
+}
+
+function render(
+  c: Context,
+  Component: FC,
+  properties: Record<string, any> = {}
+) {
+  const body = html`${raw("<!DOCTYPE html>")}${jsx(Component, properties)}`;
+
+  return c.body(renderToReadableStream(body), {
+    headers: {
+      "Transfer-Encoding": "chunked",
+      "Content-Type": "text/html; charset=UTF-8",
+    },
+  });
 }

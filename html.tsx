@@ -26,6 +26,7 @@ interface Properties {
   url?: string;
   image?: string;
   color?: string;
+  class?: string;
 }
 
 export function Html({
@@ -39,7 +40,7 @@ export function Html({
   color,
 }: Properties) {
   return (
-    <html lang={lang} class="dark">
+    <html lang={lang}>
       <head>
         <meta charset="UTF-8" />
         {hasStatic && (
