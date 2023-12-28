@@ -13,7 +13,6 @@ import type { Server } from "node:http";
 import path from "node:path";
 import { environment } from "./environment.ts";
 import { logger, loggerMiddleware, setLoggerMetadata } from "./logger.ts";
-import { getContent } from "./mdx.ts";
 
 let config = {
   pageDir: "pages",
@@ -214,21 +213,25 @@ function contentHandler(app: Hono) {
     const resolvedRoute = route === "/home" ? "/" : route;
 
     app.get(resolvedRoute, async (c) => {
-      const { default: Content, layout } = (await getContent(importPath)) as {
+      const {
+        default: Content,
+        config: { layout, ...configs },
+      } = (await import(importPath)) as {
         default: FC;
-        layout: string;
-        middlewares: MiddlewareHandler[];
+        config: {
+          layout: FC;
+          title: string;
+          description: string;
+          keywords: string;
+          publishedAt: string;
+        };
       };
 
-      const layoutPath = layout
-        ? path.join(path.dirname(importPath), layout)
-        : "";
-      const Layout = layoutPath
-        ? await import(layoutPath).then((m) => m.default)
-        : ((({ children }) => <>{children}</>) satisfies FC);
+      const Layout =
+        layout ?? ((({ children }) => <>{children}</>) satisfies FC);
 
       const Page = () => (
-        <Layout>
+        <Layout {...configs}>
           <Content />
         </Layout>
       );
