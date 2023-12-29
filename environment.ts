@@ -8,9 +8,4 @@ export const environment = {
 
   // server
   PORT: 8080,
-
-  // logs
-  LOKI_HOST: getEnvironment("LOKI_HOST"),
-  LOKI_USER: getEnvironment("LOKI_USER"),
-  LOKI_PASSWORD: getEnvironment("LOKI_PASSWORD"),
 };

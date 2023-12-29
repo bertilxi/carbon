@@ -12,7 +12,7 @@ import { readdir, stat } from "node:fs/promises";
 import type { Server } from "node:http";
 import path from "node:path";
 import { environment } from "./environment.ts";
-import { logger, loggerMiddleware, setLoggerMetadata } from "./logger.ts";
+import { getLogger, loggerMiddleware, setLoggerMetadata } from "./logger.ts";
 
 let config = {
   pageDir: "pages",
@@ -99,7 +99,7 @@ async function setupHono(
   app.notFound((c) => c.text("not found", 404));
 
   app.onError((error, c) => {
-    logger.error(error, error.message);
+    getLogger().error(error, error.message);
 
     return c.json(
       {
@@ -115,7 +115,7 @@ async function setupHono(
   app.post("/sentinel", async (c) => {
     const payload = await c.req.json();
     payload.url = c.req.url;
-    logger.info(payload, "🛡️ sentinel");
+    getLogger().info(payload, "🛡️ sentinel");
 
     return c.body(null, 200);
   });

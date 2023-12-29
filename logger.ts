@@ -1,6 +1,5 @@
 import type { MiddlewareHandler } from "hono";
 import pino from "pino";
-import type { LokiOptions } from "pino-loki";
 import pretty from "pino-pretty";
 import { environment } from "./environment.ts";
 
@@ -9,37 +8,27 @@ export function getUtmFields(url: string): Record<string, string> {
   const utmFields: Record<string, string> = {};
 
   for (const key of parsedUrl.searchParams.keys()) {
-    if (key.startsWith("utm_")) {
+    if (key.startsWith("utm_") || key === "ref") {
       utmFields[key] = parsedUrl.searchParams.get(key) as string;
     }
   }
   return utmFields;
 }
 
-const transport = pino.transport<LokiOptions>({
-  target: "pino-loki",
-  options: {
-    host: environment.LOKI_HOST,
-    basicAuth: {
-      username: environment.LOKI_USER,
-      password: environment.LOKI_PASSWORD,
-    },
-    batching: true,
-    interval: 10,
-    propsToLabels: ["service", "path", "method", "status", "utm_source"],
-  },
-});
-
 const streams = [{ stream: environment.WATCH ? pretty({}) : process.stdout }];
 
-if (!environment.WATCH) {
-  streams.push({ stream: transport });
+let logger = pino({}, pino.multistream(streams));
+
+export function getLogger() {
+  return logger;
 }
 
-export const logger = pino({}, pino.multistream(streams));
+export function setTransport(stream: any) {
+  logger = pino({}, pino.multistream([...streams, stream]));
+}
 
 export function setLoggerMetadata(key: string, value: string) {
-  logger.setBindings({ [key]: value });
+  getLogger().setBindings({ [key]: value });
 }
 
 export const loggerMiddleware: MiddlewareHandler = async (c, next) => {
@@ -58,9 +47,8 @@ export const loggerMiddleware: MiddlewareHandler = async (c, next) => {
   const message = `${c.req.method} ${c.req.path} ${c.res.status} ${elapsed} ms`;
 
   if (c.res.status >= 400) {
-    logger.error(log, message);
-    return;
+    getLogger().error(log, message);
+  } else {
+    getLogger().info(log, message);
   }
-
-  logger.info(log, message);
 };
