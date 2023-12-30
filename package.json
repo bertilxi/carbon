@@ -24,6 +24,7 @@
     "@mdx-js/node-loader": "^3.0.0",
     "autoprefixer": "^10.4.16",
     "cssnano": "^6.0.2",
+    "dayjs": "^1.11.10",
     "hono": "^3.11.11",
     "htmx.org": "^1.9.10",
     "pino": "^8.17.2",

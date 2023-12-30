@@ -204,7 +204,13 @@ function pagesHandler(app: Hono) {
     };
     const resolvedRoute = route === "/home" ? "/" : route;
 
-    app[method](resolvedRoute, ...middlewares, (c) => render(c, Page, { c }));
+    app[method](resolvedRoute, ...middlewares, (c) =>
+      render(c, Page, {
+        c,
+        route: resolvedRoute,
+        name: path.basename(importPath),
+      }),
+    );
   };
 }
 
@@ -231,7 +237,11 @@ function contentHandler(app: Hono) {
         layout ?? ((({ children }) => <>{children}</>) satisfies FC);
 
       const Page = () => (
-        <Layout {...configs}>
+        <Layout
+          {...configs}
+          route={resolvedRoute}
+          name={path.basename(importPath)}
+        >
           <Content />
         </Layout>
       );
