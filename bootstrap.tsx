@@ -71,6 +71,8 @@ export async function start({
       setupHotReload(server),
     );
   }
+
+  return { app, server, config };
 }
 
 async function setupHono(
