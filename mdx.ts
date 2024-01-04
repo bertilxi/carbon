@@ -6,6 +6,7 @@ import rehypeAutolinkHeadings from "rehype-autolink-headings";
 import rehypePrettyCode from "rehype-pretty-code";
 import rehypeSlug from "rehype-slug";
 import remarkGfm from "remark-gfm";
+import remarkToc from "remark-toc";
 
 function getTheme() {
   try {
@@ -21,7 +22,7 @@ function getTheme() {
 }
 
 const defaultLoader = createLoader({
-  remarkPlugins: [remarkGfm],
+  remarkPlugins: [[remarkToc], remarkGfm],
   rehypePlugins: [
     rehypeSlug,
     [rehypeAutolinkHeadings, { behavior: "wrap" }],
