@@ -221,19 +221,17 @@ function contentHandler(app: Hono) {
     const resolvedRoute = route === "/home" ? "/" : route;
 
     app.get(resolvedRoute, async (c) => {
-      const {
-        default: Content,
-        config: { layout, ...configs },
-      } = (await import(importPath)) as {
-        default: FC;
-        config: {
-          layout: FC;
-          title: string;
-          description: string;
-          keywords: string;
-          publishedAt: string;
+      const { default: Content, config: { layout, ...configs } = {} } =
+        (await import(importPath)) as {
+          default: FC;
+          config: {
+            layout: FC;
+            title: string;
+            description: string;
+            keywords: string;
+            publishedAt: string;
+          };
         };
-      };
 
       const Layout =
         layout ?? ((({ children }) => <>{children}</>) satisfies FC);
