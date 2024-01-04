@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { build } from "./build.ts";
 
 const scriptCache: Map<string, string> = new Map();
@@ -25,19 +26,24 @@ async function getScript(
 
 export async function Script({
   src,
+  url,
   variables = {},
   id,
 }: {
   src: string;
+  url: string;
   variables?: Record<string, any>;
   id?: string;
 }) {
+  const fullUrl = fileURLToPath(new URL(src, url));
+  const script = await getScript(fullUrl, variables);
+
   return (
     <script
       id={id}
       async
       type="module"
-      dangerouslySetInnerHTML={{ __html: await getScript(src, variables) }}
+      dangerouslySetInnerHTML={{ __html: script }}
     />
   );
 }
