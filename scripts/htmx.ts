@@ -1,5 +1,3 @@
-import htmx from "htmx.org";
+import "htmx.org";
 
-htmx.config.globalViewTransitions = true;
-
-window.htmx = htmx;
+window.htmx.config.globalViewTransitions = true;
