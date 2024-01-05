@@ -64,14 +64,8 @@ export function Html({
         {image && <meta property="og:image" content={image} />}
         {color && <meta name="theme-color" content={color} />}
 
-        <Script
-          url={import.meta.url}
-          src={path.join(dirname, "scripts", "sentinel.ts")}
-        />
-        <Script
-          url={import.meta.url}
-          src={path.join(dirname, "scripts", "color-scheme.ts")}
-        />
+        <Script url={import.meta.url} src="./scripts/sentinel.ts" />
+        <Script url={import.meta.url} src="./scripts/color-scheme.ts" />
 
         {styles && <style dangerouslySetInnerHTML={{ __html: styles }} />}
       </head>
@@ -79,20 +73,11 @@ export function Html({
       <body hx-boost="true">
         {children}
 
-        <Script
-          url={import.meta.url}
-          src={path.join(dirname, "scripts", "dark-mode.ts")}
-        />
-        <Script
-          url={import.meta.url}
-          src={path.join(dirname, "scripts", "htmx.ts")}
-        />
+        <Script url={import.meta.url} src="./scripts/dark-mode.ts" />
+        <Script url={import.meta.url} src="./scripts/htmx.ts" />
 
         {environment.WATCH && (
-          <Script
-            url={import.meta.url}
-            src={path.join(dirname, "scripts", "hot-reload.ts")}
-          />
+          <Script url={import.meta.url} src="./scripts/hot-reload.ts" />
         )}
       </body>
     </html>
