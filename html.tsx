@@ -74,7 +74,6 @@ export function Html({
         {children}
 
         <Script url={import.meta.url} src="./scripts/dark-mode.ts" />
-        <Script url={import.meta.url} src="./scripts/htmx.ts" />
 
         {environment.WATCH && (
           <Script url={import.meta.url} src="./scripts/hot-reload.ts" />

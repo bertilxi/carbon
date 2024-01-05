@@ -1,7 +1,10 @@
 import { environment } from "./environment.ts";
 import esbuild from "esbuild";
 
-export async function build(filePath: string) {
+export async function build(
+  filePath: string,
+  variables?: { [key: string]: string },
+) {
   const result = await esbuild.build({
     treeShaking: true,
     minify: !environment.WATCH,
@@ -18,6 +21,7 @@ export async function build(filePath: string) {
     write: false,
     bundle: true,
     entryPoints: [filePath],
+    define: variables,
   });
 
   return result.outputFiles[0].text;
