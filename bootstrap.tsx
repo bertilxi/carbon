@@ -150,7 +150,7 @@ async function generateFunctions(app: Hono) {
   const functions = await generate(config.functionDir, [".ts", ".tsx"]);
 
   for (const { route, getModule } of functions) {
-    app.all(path.join("api", route), async (c, next) => {
+    app.all(path.join("api", route), async () => {
       const module = await getModule();
       const {
         default: handler,
@@ -162,26 +162,23 @@ async function generateFunctions(app: Hono) {
         default: Handler;
       };
 
-      if (method !== c.req.method) {
-        return c.notFound();
-      }
+      const route = new Hono();
 
-      return compose([...middlewares, handler])(c, next);
+      route[method]("/", ...middlewares, handler);
+
+      return route.request("/");
     });
   }
 }
 
-// eslint-disable-next-line sonarjs/cognitive-complexity
 async function generatePages(app: Hono) {
   const pages = await generate(config.pageDir, [".ts", ".tsx", ".mdx"]);
 
   for (const { route, importPath, getModule } of pages) {
     const resolvedRoute = route === "/home" ? "/" : route;
 
-    app.all(resolvedRoute, async (c, next) => {
-      console.time(route);
+    app.all(resolvedRoute, async () => {
       const module = await getModule();
-      console.timeEnd(route);
 
       const page = module as {
         method: "get" | "post" | "put" | "delete";
@@ -197,13 +194,7 @@ async function generatePages(app: Hono) {
       };
 
       const method = page.method ?? "get";
-
-      if (method !== c.req.method.toLowerCase()) {
-        return c.notFound();
-      }
-
       const middlewares = page.middlewares ?? [];
-      const resolvedRoute = route === "/home" ? "/" : route;
       const Layout =
         page.config?.layout ??
         ((({ children }) => <>{children}</>) satisfies FC);
@@ -228,7 +219,11 @@ async function generatePages(app: Hono) {
           </HtmlContext.Provider>,
         );
 
-      return compose([...middlewares, handler])(c, next);
+      const route = new Hono();
+
+      route[method]("/", ...middlewares, handler);
+
+      return route.request("/");
     });
   }
 }
@@ -281,15 +276,3 @@ function render(c: Context, content: Child) {
     },
   });
 }
-
-export const compose = (handlers: MiddlewareHandler[]): Handler => {
-  return async (c, next) => {
-    for (const handler of handlers) {
-      const response = await handler(c, next);
-
-      if (response) {
-        return response;
-      }
-    }
-  };
-};
