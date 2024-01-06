@@ -1,21 +1,9 @@
 /* eslint-disable unicorn/text-encoding-identifier-case */
-import { environment } from "./environment.ts";
 import type { Child } from "hono/jsx";
-import { getCss } from "./css.ts";
+import { hasStatic } from "hydrogen/util.ts";
+import { environment } from "./environment.ts";
 import { Script } from "./script.tsx";
-import path from "node:path";
-import { hasStatic, root } from "hydrogen/util.ts";
-import { stat } from "node:fs/promises";
-
-const configPath = path.join(root, "tailwind.config.ts");
-const hasConfig = await stat(configPath).then(
-  () => true,
-  () => false,
-);
-const styles = hasConfig
-  ? await getCss(await import(configPath).then((m) => m.default))
-  : "";
-const dirname = new URL(".", import.meta.url).pathname;
+import { getStyles } from "./css.ts";
 
 interface Properties {
   children: Child;
@@ -67,7 +55,7 @@ export function Html({
         <Script url={import.meta.url} src="./scripts/sentinel.ts" />
         <Script url={import.meta.url} src="./scripts/color-scheme.ts" />
 
-        {styles && <style dangerouslySetInnerHTML={{ __html: styles }} />}
+        {getStyles()}
       </head>
 
       <body hx-boost="true">

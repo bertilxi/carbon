@@ -2,7 +2,15 @@ import "./setup.ts";
 
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
-import type { Context, Handler, MiddlewareHandler } from "hono";
+import type {
+  Env,
+  ErrorHandler,
+  Handler,
+  MiddlewareHandler,
+  Next,
+  NotFoundHandler,
+} from "hono";
+import type { Context } from "hono";
 import { Hono } from "hono";
 import { html, raw } from "hono/html";
 import type { Child } from "hono/jsx";
@@ -15,6 +23,7 @@ import path from "node:path";
 import { HtmlContext } from "./context.ts";
 import { environment } from "./environment.ts";
 import { getLogger, loggerMiddleware, setLoggerMetadata } from "./logger.ts";
+import { createCss } from "./css.ts";
 
 let config = {
   pageDir: "pages",
@@ -51,6 +60,8 @@ export async function start({
   beforeRoutes = noop,
   afterRoutes = noop,
 }: StartConfig = {}) {
+  createCss();
+
   setConfig({
     pageDir,
     functionDir,
@@ -77,6 +88,22 @@ export async function start({
   return { app, server, config };
 }
 
+const notFoundHandler = (c: Context) => {
+  return c.text("not found", 404);
+};
+
+const errorHandler = (error: Error, c: Context) => {
+  getLogger().error(error, error.message);
+
+  return c.json(
+    {
+      message: error.message || "unexpected error",
+      ...(environment.WATCH && { stack: error.stack }),
+    },
+    (error as any).statusCode ?? 500,
+  );
+};
+
 async function setupHono(
   beforeRoutes: AppHandler = noop,
   afterRoutes: AppHandler = noop,
@@ -100,19 +127,9 @@ async function setupHono(
     );
   }
 
-  app.notFound((c) => c.text("not found", 404));
+  app.notFound(notFoundHandler);
 
-  app.onError((error, c) => {
-    getLogger().error(error, error.message);
-
-    return c.json(
-      {
-        message: error.message || "unexpected error",
-        ...(environment.WATCH && { stack: error.stack }),
-      },
-      (error as any).statusCode ?? 500,
-    );
-  });
+  app.onError(errorHandler);
 
   app.get("/health", (c) => c.text("ok"));
 
@@ -126,21 +143,115 @@ async function setupHono(
 
   await beforeRoutes(app);
 
-  await Promise.all([
-    generate(config.functionDir, [".ts"], functionsHandler(app)),
-    generate(config.pageDir, [".tsx", ".mdx"], pagesHandler(app)),
-  ]);
+  await generateFunctions(app);
+
+  await generatePages(app);
 
   await afterRoutes(app);
 
   return app;
 }
 
-async function generate(
-  directory: string,
-  extensions: string[],
-  handler: (route: string, importPath: string) => void | Promise<void>,
-) {
+async function generateFunctions(app: Hono) {
+  const functions = await generate(config.functionDir, [".ts", ".tsx"]);
+
+  for (const { route, getModule } of functions) {
+    app.all(path.join("api", route), async (c, next) => {
+      const module = await getModule();
+      const {
+        default: handler,
+        method = "get",
+        middlewares = [],
+      } = module as {
+        method: "get" | "post" | "put" | "delete";
+        middlewares: MiddlewareHandler[];
+        default: Handler;
+      };
+
+      if (method !== c.req.method) {
+        return c.notFound();
+      }
+
+      const { res } = await compose(
+        [...middlewares, handler],
+        errorHandler,
+        notFoundHandler,
+      )(c, next);
+
+      return res;
+    });
+  }
+}
+
+// eslint-disable-next-line sonarjs/cognitive-complexity
+async function generatePages(app: Hono) {
+  const pages = await generate(config.pageDir, [".ts", ".tsx", ".mdx"]);
+
+  for (const { route, importPath, getModule } of pages) {
+    const resolvedRoute = route === "/home" ? "/" : route;
+
+    app.all(resolvedRoute, async (c, next) => {
+      console.time(route);
+      const module = await getModule();
+      console.timeEnd(route);
+
+      const page = module as {
+        method: "get" | "post" | "put" | "delete";
+        middlewares: MiddlewareHandler[];
+        default: FC;
+        config?: {
+          layout?: FC;
+          title?: string;
+          description?: string;
+          keywords?: string;
+          publishedAt?: string;
+        };
+      };
+
+      const method = page.method ?? "get";
+
+      if (method !== c.req.method.toLowerCase()) {
+        return c.notFound();
+      }
+
+      const middlewares = page.middlewares ?? [];
+      const resolvedRoute = route === "/home" ? "/" : route;
+      const Layout =
+        page.config?.layout ??
+        ((({ children }) => <>{children}</>) satisfies FC);
+
+      const handler: Handler = (c) =>
+        render(
+          c,
+          <HtmlContext.Provider
+            value={{
+              c,
+              route: resolvedRoute,
+              name: path.basename(importPath),
+              title: page.config?.title ?? "",
+              description: page.config?.description ?? "",
+              keywords: page.config?.keywords ?? "",
+              publishedAt: page.config?.publishedAt ?? "",
+            }}
+          >
+            <Layout>
+              <page.default />
+            </Layout>
+          </HtmlContext.Provider>,
+        );
+
+      const { res } = await compose(
+        [...middlewares, handler],
+        errorHandler,
+        notFoundHandler,
+      )(c, next);
+
+      return res;
+    });
+  }
+}
+
+async function generate(directory: string, extensions: string[]) {
   const directoryPath = path.join(root, directory);
   const existDirectory = await stat(directoryPath).then(
     () => true,
@@ -148,7 +259,7 @@ async function generate(
   );
 
   if (!existDirectory) {
-    return;
+    return [];
   }
 
   let entries = await readdir(path.join(root, directory), {
@@ -173,69 +284,9 @@ async function generate(
         entry.name,
       );
 
-      return handler(route, importPath);
+      return { route, importPath, getModule: () => import(importPath) };
     }),
   );
-}
-
-function functionsHandler(app: Hono) {
-  return async (route: string, importPath: string) => {
-    const {
-      default: handler,
-      method = "get",
-      middlewares = [],
-    } = (await import(importPath)) as {
-      method: "get" | "post" | "put" | "delete";
-      middlewares: MiddlewareHandler[];
-      default: Handler;
-    };
-
-    app[method](path.join("api", route), ...middlewares, handler);
-  };
-}
-
-function pagesHandler(app: Hono) {
-  return async (route: string, importPath: string) => {
-    const page = (await import(importPath)) as {
-      method: "get" | "post" | "put" | "delete";
-      middlewares: MiddlewareHandler[];
-      default: FC;
-      config?: {
-        layout?: FC;
-        title?: string;
-        description?: string;
-        keywords?: string;
-        publishedAt?: string;
-      };
-    };
-
-    const method = page.method ?? "get";
-    const middlewares = page.middlewares ?? [];
-    const resolvedRoute = route === "/home" ? "/" : route;
-    const Layout =
-      page.config?.layout ?? ((({ children }) => <>{children}</>) satisfies FC);
-
-    app[method](resolvedRoute, ...middlewares, (c) =>
-      render(
-        c,
-        <HtmlContext.Provider
-          value={{
-            c,
-            route: resolvedRoute,
-            name: path.basename(importPath),
-            title: page.config?.title ?? "",
-            description: page.config?.description ?? "",
-            keywords: page.config?.keywords ?? "",
-            publishedAt: page.config?.publishedAt ?? "",
-          }}
-        >
-          <Layout>
-            <page.default />
-          </Layout>
-        </HtmlContext.Provider>,
-      ),
-    );
-  };
 }
 
 function render(c: Context, content: Child) {
@@ -248,3 +299,62 @@ function render(c: Context, content: Child) {
     },
   });
 }
+
+export const compose = (
+  handlers: Handler[],
+  onError?: ErrorHandler<Env>,
+  onNotFound?: NotFoundHandler<Env>,
+) => {
+  // eslint-disable-next-line sonarjs/cognitive-complexity
+  return (context: Context, next?: Next) => {
+    let index = -1;
+    return dispatch(0);
+
+    async function dispatch(nextIndex: number): Promise<Context> {
+      if (nextIndex <= index) {
+        throw new Error("next() called multiple times");
+      }
+      index = nextIndex;
+
+      let handler: Handler | undefined;
+
+      if (handlers[nextIndex]) {
+        handler = handlers[nextIndex];
+        if (context.req) {
+          context.req.routeIndex = nextIndex;
+        }
+      } else {
+        handler = nextIndex === handlers.length ? next : undefined;
+      }
+
+      let response: Response;
+      let isError = false;
+
+      if (handler) {
+        try {
+          response = await handler(context, async () => {
+            await dispatch(nextIndex + 1);
+          });
+        } catch (error) {
+          if (error instanceof Error && context.req && onError) {
+            context.error = error;
+            response = await onError(error, context);
+            isError = true;
+          } else {
+            throw error;
+          }
+        }
+      } else {
+        if (context.req && context.finalized === false && onNotFound) {
+          response = await onNotFound(context);
+        }
+      }
+
+      if (response && (context.finalized === false || isError)) {
+        context.res = response;
+      }
+
+      return context;
+    }
+  };
+};
