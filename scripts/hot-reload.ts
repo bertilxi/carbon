@@ -30,7 +30,7 @@ function connect(callback: () => void = () => void 0) {
     clearTimeout(reconnectionTimerId);
     reconnectionTimerId = setTimeout(() => {
       connect(refresh);
-    }, 800);
+    }, 300);
   });
 }
 

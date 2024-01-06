@@ -36,6 +36,6 @@ export async function createCss() {
     stylesPath,
     "-o",
     path.join(root, "static", styleName),
-    environment.WATCH ? "" : "-m",
+    environment.WATCH ? "--watch" : "-m",
   ]);
 }
