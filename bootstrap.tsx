@@ -2,7 +2,7 @@ import "./setup.ts";
 
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
-import type { Context, Handler, MiddlewareHandler } from "hono";
+import type { Context, Handler, MiddlewareHandler, Next } from "hono";
 import { Hono } from "hono";
 import { html, raw } from "hono/html";
 import type { Child } from "hono/jsx";
@@ -150,7 +150,7 @@ async function generateFunctions(app: Hono) {
   const functions = await generate(config.functionDir, [".ts", ".tsx"]);
 
   for (const { route, getModule } of functions) {
-    app.all(path.join("api", route), async () => {
+    app.all(path.join("api", route), async (c, next) => {
       const module = await getModule();
       const {
         default: handler,
@@ -162,11 +162,11 @@ async function generateFunctions(app: Hono) {
         default: Handler;
       };
 
-      const route = new Hono();
+      if (method !== c.req.method.toLowerCase()) {
+        return c.notFound();
+      }
 
-      route[method]("/", ...middlewares, handler);
-
-      return route.request("/");
+      return compose(c, next, ...middlewares, handler);
     });
   }
 }
@@ -177,7 +177,7 @@ async function generatePages(app: Hono) {
   for (const { route, importPath, getModule } of pages) {
     const resolvedRoute = route === "/home" ? "/" : route;
 
-    app.all(resolvedRoute, async () => {
+    app.all(resolvedRoute, async (c, next) => {
       const module = await getModule();
 
       const page = module as {
@@ -194,6 +194,11 @@ async function generatePages(app: Hono) {
       };
 
       const method = page.method ?? "get";
+
+      if (method !== c.req.method.toLowerCase()) {
+        return c.notFound();
+      }
+
       const middlewares = page.middlewares ?? [];
       const Layout =
         page.config?.layout ??
@@ -219,11 +224,7 @@ async function generatePages(app: Hono) {
           </HtmlContext.Provider>,
         );
 
-      const route = new Hono();
-
-      route[method]("/", ...middlewares, handler);
-
-      return route.request("/");
+      return compose(c, next, ...middlewares, handler);
     });
   }
 }
@@ -275,4 +276,24 @@ function render(c: Context, content: Child) {
       "Content-Type": "text/html; charset=UTF-8",
     },
   });
+}
+
+async function compose(
+  c: Context,
+  next: Next,
+  ...handlers: MiddlewareHandler[]
+) {
+  const [handler, ...rest] = handlers;
+
+  try {
+    const response = await handler(c, () => compose(c, next, ...rest) as any);
+
+    if (response) {
+      return response;
+    }
+  } catch (error) {
+    return errorHandler(error as Error, c);
+  }
+
+  return notFoundHandler(c);
 }
