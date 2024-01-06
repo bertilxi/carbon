@@ -2,15 +2,7 @@ import "./setup.ts";
 
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
-import type {
-  Env,
-  ErrorHandler,
-  Handler,
-  MiddlewareHandler,
-  Next,
-  NotFoundHandler,
-} from "hono";
-import type { Context } from "hono";
+import type { Context, Handler, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import { html, raw } from "hono/html";
 import type { Child } from "hono/jsx";
@@ -21,9 +13,9 @@ import { readdir, stat } from "node:fs/promises";
 import type { Server } from "node:http";
 import path from "node:path";
 import { HtmlContext } from "./context.ts";
+import { createCss } from "./css.ts";
 import { environment } from "./environment.ts";
 import { getLogger, loggerMiddleware, setLoggerMetadata } from "./logger.ts";
-import { createCss } from "./css.ts";
 
 let config = {
   pageDir: "pages",
@@ -116,10 +108,12 @@ async function setupHono(
     app.use(
       "/static/*",
       (c, next) => {
-        c.header(
-          "Cache-Control",
-          "public, max-age=31536000, s-maxage=31536000",
-        );
+        if (!environment.WATCH) {
+          c.header(
+            "Cache-Control",
+            "public, max-age=31536000, s-maxage=31536000",
+          );
+        }
 
         return next();
       },
@@ -172,13 +166,7 @@ async function generateFunctions(app: Hono) {
         return c.notFound();
       }
 
-      const { res } = await compose(
-        [...middlewares, handler],
-        errorHandler,
-        notFoundHandler,
-      )(c, next);
-
-      return res;
+      return compose([...middlewares, handler])(c, next);
     });
   }
 }
@@ -240,13 +228,7 @@ async function generatePages(app: Hono) {
           </HtmlContext.Provider>,
         );
 
-      const { res } = await compose(
-        [...middlewares, handler],
-        errorHandler,
-        notFoundHandler,
-      )(c, next);
-
-      return res;
+      return compose([...middlewares, handler])(c, next);
     });
   }
 }
@@ -300,61 +282,14 @@ function render(c: Context, content: Child) {
   });
 }
 
-export const compose = (
-  handlers: Handler[],
-  onError?: ErrorHandler<Env>,
-  onNotFound?: NotFoundHandler<Env>,
-) => {
-  // eslint-disable-next-line sonarjs/cognitive-complexity
-  return (context: Context, next?: Next) => {
-    let index = -1;
-    return dispatch(0);
+export const compose = (handlers: MiddlewareHandler[]): Handler => {
+  return async (c, next) => {
+    for (const handler of handlers) {
+      const response = await handler(c, next);
 
-    async function dispatch(nextIndex: number): Promise<Context> {
-      if (nextIndex <= index) {
-        throw new Error("next() called multiple times");
+      if (response) {
+        return response;
       }
-      index = nextIndex;
-
-      let handler: Handler | undefined;
-
-      if (handlers[nextIndex]) {
-        handler = handlers[nextIndex];
-        if (context.req) {
-          context.req.routeIndex = nextIndex;
-        }
-      } else {
-        handler = nextIndex === handlers.length ? next : undefined;
-      }
-
-      let response: Response;
-      let isError = false;
-
-      if (handler) {
-        try {
-          response = await handler(context, async () => {
-            await dispatch(nextIndex + 1);
-          });
-        } catch (error) {
-          if (error instanceof Error && context.req && onError) {
-            context.error = error;
-            response = await onError(error, context);
-            isError = true;
-          } else {
-            throw error;
-          }
-        }
-      } else {
-        if (context.req && context.finalized === false && onNotFound) {
-          response = await onNotFound(context);
-        }
-      }
-
-      if (response && (context.finalized === false || isError)) {
-        context.res = response;
-      }
-
-      return context;
     }
   };
 };
