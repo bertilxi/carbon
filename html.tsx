@@ -17,7 +17,7 @@ interface Properties {
   class?: string;
 }
 
-export function Html({
+export async function Html({
   children,
   title,
   description,
@@ -55,7 +55,7 @@ export function Html({
         <Script url={import.meta.url} src="./scripts/sentinel.ts" />
         <Script url={import.meta.url} src="./scripts/color-scheme.ts" />
 
-        {getStyles()}
+        {await getStyles()}
       </head>
 
       <body hx-boost="true">

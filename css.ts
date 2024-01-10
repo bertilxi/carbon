@@ -1,15 +1,27 @@
 import { root } from "hydrogen/util.ts";
 import { spawn } from "node:child_process";
-import { mkdir, stat } from "node:fs/promises";
+import { mkdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { environment } from "./environment.ts";
 import { raw } from "hono/html";
 import { randomUUID } from "node:crypto";
+import { sockets } from "./hot-reload.ts";
 
 let styleName = "";
+let styles = "";
 
-export function getStyles() {
-  return raw(`<link href="/static/${styleName}" rel="stylesheet" />`);
+async function readStyles() {
+  if (!environment.WATCH && styles) {
+    return styles;
+  }
+
+  styles = await readFile(path.join(root, "static", styleName), "utf8");
+
+  return styles;
+}
+
+export async function getStyles() {
+  return raw(`<style>${await readStyles()}</style>`);
 }
 
 export async function createCss() {
@@ -30,7 +42,7 @@ export async function createCss() {
 
   styleName = environment.WATCH ? "styles.css" : `styles.${randomUUID()}.css`;
 
-  spawn("npx", [
+  const tailwind = spawn("npx", [
     "tailwindcss",
     "-i",
     stylesPath,
@@ -38,4 +50,19 @@ export async function createCss() {
     path.join(root, "static", styleName),
     environment.WATCH ? "--watch" : "-m",
   ]);
+
+  tailwind.stdout.on("data", handleTailwindWatch);
+  tailwind.stderr.on("data", handleTailwindWatch);
+}
+
+function handleTailwindWatch(value: string) {
+  const canRefresh = value.includes("Done");
+
+  if (!canRefresh) {
+    return;
+  }
+
+  for (const socket of sockets) {
+    socket.send("refresh");
+  }
 }

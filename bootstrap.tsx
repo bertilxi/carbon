@@ -72,7 +72,7 @@ export async function start({
   console.info(`🚀 http://localhost:${port ?? environment.PORT}`);
 
   if (environment.WATCH) {
-    import("hydrogen/hot-reload.ts").then(({ setupHotReload }) =>
+    import("./hot-reload.ts").then(({ setupHotReload }) =>
       setupHotReload(server),
     );
   }
