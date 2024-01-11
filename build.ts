@@ -1,3 +1,4 @@
+import memo from "memoizee";
 import { environment } from "./environment.ts";
 import esbuild from "esbuild";
 
@@ -26,3 +27,5 @@ export async function build(
 
   return result.outputFiles[0].text;
 }
+
+export const buildCached = memo(build);

@@ -18,9 +18,7 @@ export function setupHotReload(server: Server) {
 
   wss.on("error", console.error);
 
-  setTimeout(() => {
-    for (const socket of sockets) {
-      socket.send("refresh");
-    }
-  });
+  for (const socket of sockets) {
+    setImmediate(() => socket.send("refresh"));
+  }
 }

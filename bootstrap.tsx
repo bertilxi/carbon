@@ -13,9 +13,9 @@ import { readdir, stat } from "node:fs/promises";
 import type { Server } from "node:http";
 import path from "node:path";
 import { HtmlContext } from "./context.ts";
-import { createCss } from "./css.ts";
 import { environment } from "./environment.ts";
 import { getLogger, loggerMiddleware, setLoggerMetadata } from "./logger.ts";
+import { watchCss } from "./css.ts";
 
 let config = {
   pageDir: "pages",
@@ -54,7 +54,7 @@ export async function start({
   beforeRoutes = noop,
   afterRoutes = noop,
 }: StartConfig = {}) {
-  createCss();
+  watchCss();
 
   setConfig({
     pageDir,

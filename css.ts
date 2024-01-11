@@ -1,54 +1,60 @@
+import autoprefixer from "autoprefixer";
+import cssnano from "cssnano";
+import { raw } from "hono/html";
 import { root } from "hydrogen/util.ts";
-import { spawn } from "node:child_process";
+import memo from "memoizee";
 import { mkdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
-import { environment } from "./environment.ts";
-import { raw } from "hono/html";
-import { randomUUID } from "node:crypto";
+import postcss from "postcss";
+import tailwindcss from "tailwindcss";
+import { spawn } from "node:child_process";
 import { sockets } from "./hot-reload.ts";
+import { environment } from "./environment.ts";
 
-let styleName = "";
-let styles = "";
-
-async function readStyles() {
-  if (!environment.WATCH && styles) {
-    return styles;
-  }
-
-  styles = await readFile(path.join(root, "static", styleName), "utf8");
-
-  return styles;
-}
-
-export async function getStyles() {
-  return raw(`<style>${await readStyles()}</style>`);
-}
-
-export async function createCss() {
+async function processCss() {
   const stylesPath = path.join(root, "styles.css");
-
-  const hasStyles = await stat(stylesPath).then(
+  const hasCss = await stat(stylesPath).then(
     () => true,
     () => false,
   );
 
-  if (!hasStyles) {
-    return;
+  if (!hasCss) {
+    return "";
+  }
+
+  const css = await readFile(stylesPath, "utf8");
+
+  const result = await postcss(
+    [tailwindcss, autoprefixer, cssnano].filter(Boolean),
+  ).process(css, { from: undefined });
+
+  return result.css;
+}
+
+export const getCss = memo(processCss);
+
+export async function watchCss() {
+  const stylesPath = path.join(root, "styles.css");
+  const hasCss = await stat(stylesPath).then(
+    () => true,
+    () => false,
+  );
+
+  if (!hasCss) {
+    return "";
   }
 
   await mkdir(path.join(root, "static"), { recursive: true }).catch(
     () => void 0,
   );
 
-  styleName = environment.WATCH ? "styles.css" : `styles.${randomUUID()}.css`;
-
   const tailwind = spawn("npx", [
     "tailwindcss",
     "-i",
     stylesPath,
     "-o",
-    path.join(root, "static", styleName),
-    environment.WATCH ? "--watch" : "-m",
+    path.join(root, "static", "styles.css"),
+    "--watch",
   ]);
 
   tailwind.stdout.on("data", handleTailwindWatch);
@@ -63,6 +69,19 @@ function handleTailwindWatch(value: string) {
   }
 
   for (const socket of sockets) {
-    socket.send("refresh");
+    setImmediate(() => socket.send("refresh"));
   }
+}
+
+export async function getStyles() {
+  if (environment.WATCH) {
+    const styles = await readFile(
+      path.join(root, "static", "styles.css"),
+      "utf8",
+    ).catch(() => "");
+
+    return raw(`<style>${styles}</style>`);
+  }
+
+  return raw(`<style>${await getCss()}</style>`);
 }
