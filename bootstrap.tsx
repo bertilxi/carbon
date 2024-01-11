@@ -38,6 +38,7 @@ const noop = () => void 0;
 interface StartConfig {
   name?: string;
   port?: number;
+  hot?: boolean;
   pageDir?: string;
   functionDir?: string;
   beforeRoutes?: AppHandler;
@@ -47,6 +48,7 @@ interface StartConfig {
 export async function start({
   name = "app",
   port,
+  hot = environment.WATCH,
   pageDir,
   functionDir,
   beforeRoutes = noop,
@@ -71,7 +73,7 @@ export async function start({
 
   console.info(`🚀 http://localhost:${port ?? environment.PORT}`);
 
-  if (environment.WATCH) {
+  if (hot) {
     import("./hot-reload.ts").then(({ setupHotReload }) =>
       setupHotReload(server),
     );
